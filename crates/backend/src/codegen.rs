@@ -192,6 +192,9 @@ impl ToTokens for ast::Struct {
             #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
             #[no_mangle]
             pub unsafe extern fn #free_fn(ptr: u32) {
+                #[used]
+                static A: unsafe extern fn(u32) = #free_fn;
+
                 <#name as ::wasm_bindgen::convert::FromWasmAbi>::from_abi(
                     ptr,
                     &mut ::wasm_bindgen::convert::GlobalStack::new(),
@@ -250,6 +253,9 @@ impl ToTokens for ast::StructField {
             pub unsafe extern fn #getter(js: u32)
                 -> <#ty as ::wasm_bindgen::convert::IntoWasmAbi>::Abi
             {
+                #[used]
+                static A: unsafe extern fn(u32) -> <#ty as ::wasm_bindgen::convert::IntoWasmAbi>::Abi = #getter;
+
                 use wasm_bindgen::__rt::{WasmRefCell, assert_not_null};
                 use wasm_bindgen::convert::{GlobalStack, IntoWasmAbi};
 
@@ -268,6 +274,8 @@ impl ToTokens for ast::StructField {
             #[no_mangle]
             #[doc(hidden)]
             pub extern fn #desc() {
+                #[used]
+                static A: extern fn() = #desc;
                 use wasm_bindgen::describe::*;
                 <#ty as WasmDescribe>::describe();
             }
@@ -286,6 +294,9 @@ impl ToTokens for ast::StructField {
             ) {
                 use wasm_bindgen::__rt::{WasmRefCell, assert_not_null};
                 use wasm_bindgen::convert::{GlobalStack, FromWasmAbi};
+
+                #[used]
+                static A: unsafe extern fn(u32, <#ty as FromWasmAbi>::Abi) = #setter;
 
                 let js = js as *mut WasmRefCell<#struct_name>;
                 assert_not_null(js);
@@ -443,12 +454,16 @@ impl ToTokens for ast::Export {
         let descriptor_name = Ident::new(&descriptor_name, Span::call_site());
         let nargs = self.function.arguments.len() as u32;
         let argtys = self.function.arguments.iter().map(|arg| &arg.ty);
+        let args = &args;
 
         let tokens = quote! {
             #[export_name = #export_name]
             #[allow(non_snake_case)]
             #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
             pub extern fn #generated_name(#(#args),*) #ret_ty {
+                #[used]
+                static A: extern fn(#(#args),*) #ret_ty = #generated_name;
+
                 ::wasm_bindgen::__rt::link_this_library();
                 let #ret = {
                     let mut __stack = unsafe {
@@ -480,6 +495,8 @@ impl ToTokens for ast::Export {
             #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
             #[doc(hidden)]
             pub extern fn #descriptor_name() {
+                #[used]
+                static A: extern fn() = #descriptor_name;
                 use wasm_bindgen::describe::*;
                 inform(FUNCTION);
                 inform(#nargs);
@@ -764,6 +781,9 @@ impl<'a> ToTokens for DescribeImport<'a> {
             #[doc(hidden)]
             pub extern fn #describe_name() {
                 use wasm_bindgen::describe::*;
+                #[used]
+                static A: extern fn() = #describe_name;
+
                 inform(FUNCTION);
                 inform(#nargs);
                 #(<#argtys as WasmDescribe>::describe();)*

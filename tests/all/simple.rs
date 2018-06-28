@@ -341,3 +341,44 @@ fn no_std_class() {
         )
         .test();
 }
+
+#[test]
+fn inner_module() {
+    project()
+        .file("src/lib.rs", r#"
+            #![feature(proc_macro, wasm_custom_section, wasm_import_module, used)]
+            #![allow(dead_code, warnings)]
+
+            extern crate wasm_bindgen;
+
+            mod foo {
+                use wasm_bindgen::prelude::*;
+
+                #[wasm_bindgen]
+                extern {
+                    fn bar();
+                }
+
+                #[wasm_bindgen]
+                pub fn foo() {
+                    bar();
+                }
+            }
+        "#)
+        .file("test.ts", r#"
+            import * as wasm from "./out";
+            import * as assert from "assert";
+
+            let HIT = false;
+
+            export function bar() {
+                HIT = true;
+            }
+
+            export function test() {
+                wasm.foo();
+                assert.strictEqual(HIT, true);
+            }
+        "#)
+        .test();
+}

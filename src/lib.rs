@@ -5,7 +5,7 @@
 //! this crate and this crate also provides JS bindings through the `JsValue`
 //! interface.
 
-#![feature(use_extern_macros, wasm_import_module, try_reserve, unsize)]
+#![feature(use_extern_macros, wasm_import_module, try_reserve, unsize, used)]
 #![cfg_attr(feature = "js_globals", feature(proc_macro, wasm_custom_section))]
 #![no_std]
 
