@@ -8,5 +8,5 @@ cargo +nightly build --target wasm32-unknown-unknown --release
 cargo +nightly run --manifest-path ../../crates/cli/Cargo.toml \
   --bin wasm-bindgen -- \
   ../../target/wasm32-unknown-unknown/release/add.wasm --out-dir .
-npm install
-npm run serve
+#npm install
+#npm run serve

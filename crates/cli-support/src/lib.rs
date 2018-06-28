@@ -230,6 +230,7 @@ fn extract_programs(module: &mut Module) -> Result<Vec<shared::Program>, Error> 
             Section::Custom(ref s) => s,
             _ => continue,
         };
+        println!("custom {}", custom.name());
         if custom.name() != "__wasm_bindgen_unstable" {
             continue;
         }
@@ -279,6 +280,7 @@ to open an issue at https://github.com/alexcrichton/wasm-bindgen/issues!
                 Ok(f) => f,
                 Err(e) => bail!("failed to decode what looked like wasm-bindgen data: {}", e),
             };
+            println!("program");
             ret.push(p);
         }
     }

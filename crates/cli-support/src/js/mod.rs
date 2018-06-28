@@ -1781,11 +1781,13 @@ impl<'a, 'b> SubContext<'a, 'b> {
         if !self.cx.wasm_import_needed(&import.shim) {
             return Ok(())
         }
+        println!("generate import {}", import.shim);
 
         let descriptor = match self.cx.describe(&import.shim) {
             None => return Ok(()),
             Some(d) => d,
         };
+        println!("described");
 
         let target = match &import.method {
             Some(shared::MethodData {
