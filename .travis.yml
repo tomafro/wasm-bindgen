@@ -34,7 +34,7 @@ DEPLOY_TO_GITHUB: &DEPLOY_TO_GITHUB
       tags: true
     provider: releases
     skip_cleanup: true
-  if: branch = master OR branch =~ /^\d/
+  if: branch = sccache OR branch =~ /^\d/
 
 matrix:
   include:
@@ -53,7 +53,7 @@ matrix:
         - npm run run-lint-examples
       addons:
         firefox: latest
-      if: branch = master
+      if: branch = sccache
 
     # All examples work
     - rust: nightly
@@ -70,7 +70,7 @@ matrix:
              ln -s ../../node_modules . &&
              ./build.sh) || exit 1;
           done
-      if: branch = master
+      if: branch = sccache
 
     # The `web-sys` crate's tests pass on nightly.
     - rust: nightly
@@ -82,7 +82,7 @@ matrix:
         - cargo test -p web-sys --target wasm32-unknown-unknown
       addons:
         firefox: latest
-      if: branch = master
+      if: branch = sccache
 
     # The `js-sys` crate's tests pass on nightly.
     - rust: nightly
@@ -94,18 +94,19 @@ matrix:
         - cargo test -p js-sys --target wasm32-unknown-unknown
       addons:
         firefox: latest
-      if: branch = master
+      if: branch = sccache
 
     # Tests pass on nightly using yarn
     - rust: nightly
       env: JOB=test-yarn-smoke
       install:
         - *INSTALL_NODE_VIA_NVM
-        - curl -o- -L https://yarnpkg.com/install.sh | bash -s -- --version 1.7.0
+        - travis_retry curl -OLSf https://yarnpkg.com/install.sh
+        - travis_retry bash install.sh -- --version 1.7.0
         - export PATH=$HOME/.yarn/bin:$PATH
         - yarn install --freeze-lockfile
       script: cargo test api::works
-      if: branch = master
+      if: branch = sccache
 
     # WebIDL tests pass on nightly
     - rust: nightly
@@ -119,15 +120,15 @@ matrix:
     # Dist linux binary
     - rust: nightly
       env: JOB=dist-linux TARGET=x86_64-unknown-linux-musl
-      before_script: rustup target add $TARGET
       install:
         - travis_retry curl -O https://www.openssl.org/source/openssl-1.0.2o.tar.gz
         - tar xf openssl-1.0.2o.tar.gz
         - (cd openssl-1.0.2o &&
           CC=musl-gcc ./Configure --prefix=$HOME/openssl-musl no-dso no-ssl2 no-ssl3 linux-x86_64 -fPIC &&
           make -j$(nproc) &&
-          make install)
+          make install_sw)
         - export OPENSSL_DIR=$HOME/openssl-musl
+        - rustup target add $TARGET
       script: cargo build --manifest-path crates/cli/Cargo.toml --release --target $TARGET
       addons:
         apt:
@@ -146,12 +147,12 @@ matrix:
     - rust: stable
       env: JOB=check-stable-cli
       script: cargo check --manifest-path crates/cli/Cargo.toml
-      if: branch = master
+      if: branch = sccache
     # CLI builds on nightly
     - rust: nightly
       env: JOB=check-nightly-cli
       script: cargo check --manifest-path crates/cli/Cargo.toml
-      if: branch = master
+      if: branch = sccache
 
     # Build documentation for the gh-pages branch
     - rust: nightly
@@ -173,7 +174,21 @@ matrix:
         github-token: $GITHUB_TOKEN  # Set in travis-ci.org dashboard, marked secure
         local-dir: guide/book
         keep-history: false
-      if: branch = master
+      if: branch = sccache
+
+before_install:
+  |
+    starget=x86_64-unknown-linux-musl &&
+    if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+      starget=x86_64-apple-darwin;
+    fi &&
+    travis_retry curl -OLSf https://github.com/mozilla/sccache/releases/download/0.2.7/sccache-0.2.7-$starget.tar.gz &&
+    tar xzf sccache-*.tar.gz sccache-0.2.7-$starget/sccache &&
+    export PATH=$PATH:`pwd`/sccache-0.2.7-$starget &&
+    export RUSTC_WRAPPER=sccache
+
+after_script:
+  - sccache -s
 
 notifications:
   email:
