@@ -37,6 +37,7 @@ wasm-bindgen-test-project-builder = { path = "crates/test-project-builder", vers
 [workspace]
 members = [
   "crates/cli",
+  "crates/futures",
   "crates/js-sys",
   "crates/test",
   "crates/typescript",
