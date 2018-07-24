@@ -1,17 +1,21 @@
 #[macro_use]
 extern crate failure;
-extern crate wasm_bindgen_cli_support;
 extern crate parity_wasm;
+extern crate rouille;
+extern crate wasm_bindgen_cli_support;
 
 use std::env;
 use std::fs::{self, File};
-use std::io::{Write, Read};
-use std::path::PathBuf;
-use std::process::{self, Command};
+use std::io::{self, Write, Read};
+use std::path::{PathBuf, Path};
+use std::process;
 
 use failure::{ResultExt, Error};
 use parity_wasm::elements::{Module, Deserialize};
 use wasm_bindgen_cli_support::Bindgen;
+
+mod node;
+mod server;
 
 fn main() {
     let err = match rmain() {
@@ -50,66 +54,37 @@ fn rmain() -> Result<(), Error> {
     fs::create_dir(&tmpdir)
         .context("creating temporary directory")?;
 
+    let node = true;
+
+    print!("Executing bindgen ...\r");
+    io::stdout().flush()?;
+
     // For now unconditionally generate wasm-bindgen code tailored for node.js,
     // but eventually we'll want more options here for browsers!
     let mut b = Bindgen::new();
     b.debug(true)
-        .nodejs(true)
+        .nodejs(node)
+        .nodejs_experimental_modules(node)
         .input_path(&wasm_file_to_test)
         .keep_debug(false)
         .generate(&tmpdir)
         .context("executing `wasm-bindgen` over the wasm file")?;
 
+    print!("                     \r");
+    io::stdout().flush()?;
+
     let module = wasm_file_to_test.file_stem()
         .and_then(|s| s.to_str())
         .ok_or_else(|| format_err!("invalid filename passed in"))?;
 
-    let mut js_to_execute = format!(r#"
-        const {{ exit }} = require('process');
+    if node {
+        return node::execute(&module, &tmpdir, &args.collect::<Vec<_>>())
+    }
 
-        let cx = null;
+    server::spawn(&module, &tmpdir, &args.collect::<Vec<_>>())
+}
 
-        // override `console.log` and `console.error` before we import tests to
-        // ensure they're bound correctly in wasm. This'll allow us to intercept
-        // all these calls and capture the output of tests
-        const prev_log = console.log;
-        console.log = function() {{
-            if (cx === null)  {{
-                prev_log.apply(null, arguments);
-            }} else {{
-                cx.console_log(prev_log, arguments);
-            }}
-        }};
-        const prev_error = console.error;
-        console.error = function() {{
-            if (cx === null) {{
-                prev_error.apply(null, arguments);
-            }} else {{
-                cx.console_error(prev_error, arguments);
-            }}
-        }};
-
-        const support = require("./{0}");
-        const wasm = require("./{0}_bg");
-
-        // Hack for now to support 0 tests in a binary. This should be done
-        // better...
-        if (support.Context === undefined)
-            process.exit(0);
-
-        cx = new support.Context();
-
-        // Forward runtime arguments. These arguments are also arguments to the
-        // `wasm-bindgen-test-runner` which forwards them to node which we
-        // forward to the test harness. this is basically only used for test
-        // filters for now.
-        cx.args(process.argv.slice(2));
-
-        const tests = [];
-    "#,
-        module
-    );
-
+fn find_tests(tmpdir: &Path, module: &str) -> Result<Vec<String>, Error> {
     // Collect all tests that the test harness is supposed to run. We assume
     // that any exported function with the prefix `__wbg_test` is a test we need
     // to execute.
@@ -123,44 +98,14 @@ fn rmain() -> Result<(), Error> {
         .context("failed to read wasm file")?;
     let module = Module::deserialize(&mut &wasm[..])
         .context("failed to deserialize wasm module")?;
+    let mut ret = Vec::new();
     if let Some(exports) = module.export_section() {
         for export in exports.entries() {
             if !export.field().starts_with("__wbg_test") {
                 continue
             }
-            js_to_execute.push_str(&format!("tests.push(wasm.{})\n", export.field()));
+            ret.push(export.field().to_string());
         }
     }
-
-    // And as a final addendum, exit with a nonzero code if any tests fail.
-    js_to_execute.push_str("if (!cx.run(tests)) exit(1);\n");
-
-    let js_path = tmpdir.join("run.js");
-    File::create(&js_path)
-        .and_then(|mut f| f.write_all(js_to_execute.as_bytes()))
-        .context("failed to write JS file")?;
-
-    // Last but not least, execute `node`! Add an entry to `NODE_PATH` for the
-    // project root to hopefully pick up `node_modules` and other local imports.
-    let path = env::var_os("NODE_PATH").unwrap_or_default();
-    let mut paths = env::split_paths(&path).collect::<Vec<_>>();
-    paths.push(env::current_dir().unwrap());
-    exec(
-        Command::new("node")
-            .env("NODE_PATH", env::join_paths(&paths).unwrap())
-            .arg(&js_path)
-            .args(args)
-    )
-}
-
-#[cfg(unix)]
-fn exec(cmd: &mut Command) -> Result<(), Error> {
-    use std::os::unix::prelude::*;
-    Err(Error::from(cmd.exec()).context("failed to execute `node`").into())
-}
-
-#[cfg(windows)]
-fn exec(cmd: &mut Command) -> Result<(), Error> {
-    let status = cmd.status()?;
-    process::exit(status.code().unwrap_or(3));
+    Ok(ret)
 }

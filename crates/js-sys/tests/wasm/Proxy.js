@@ -1,11 +1,11 @@
-exports.proxy_target = function() {
+export function proxy_target() {
   return { a: 100 };
-};
+}
 
-exports.proxy_handler = function() {
+export function proxy_handler() {
   return {
     get: function(obj, prop) {
       return prop in obj ? obj[prop] : 37;
     }
   };
-};
+}

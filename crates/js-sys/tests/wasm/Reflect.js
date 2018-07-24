@@ -1,8 +1,8 @@
-exports.get_char_at = function() {
+export function get_char_at() {
   return "foo".charAt;
-};
+}
 
-exports.Rectangle = class {
+export class Rectangle {
   constructor(x, y){
     this.x = x,
     this.y = y
@@ -11,9 +11,9 @@ exports.Rectangle = class {
   static eq(x, y) {
     return x === y;
   }
-};
+}
 
-exports.Rectangle2 = class {
+export class Rectangle2 {
   constructor(x, y){
     this.x = x,
     this.y = y
@@ -22,4 +22,4 @@ exports.Rectangle2 = class {
   static eq(x, y) {
     return x === y;
   }
-};
+}

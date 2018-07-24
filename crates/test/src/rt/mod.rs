@@ -1,10 +1,18 @@
+#![doc(hidden)]
+
 use std::cell::{RefCell, Cell};
 use std::fmt;
 use std::mem;
 
 use console_error_panic_hook;
+use futures::future::Future;
 use js_sys::{Array, Function};
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::{self, Promise};
+
+pub mod node;
+pub mod browser;
+pub mod detect;
 
 /// Runtime test harness support instantiated in JS.
 ///
@@ -20,6 +28,15 @@ pub struct Context {
     current_log: RefCell<String>,
     current_error: RefCell<String>,
     ignore_this_test: Cell<bool>,
+    formatter: Box<Formatter>,
+}
+
+trait Formatter {
+    fn writeln(&self, line: &str);
+    fn log_start(&self, name: &str);
+    fn log_success(&self);
+    fn log_ignored(&self);
+    fn log_failure(&self, err: JsValue) -> String;
 }
 
 #[wasm_bindgen]
@@ -28,20 +45,9 @@ extern {
     #[doc(hidden)]
     pub fn console_log(s: &str);
 
-    // Not using `js_sys::Error` because node's errors specifically have a
-    // `stack` attribute.
-    type NodeError;
-    #[wasm_bindgen(method, getter, js_class = "Error", structural)]
-    fn stack(this: &NodeError) -> String;
-
     // General-purpose conversion into a `String`.
     #[wasm_bindgen(js_name = String)]
     fn stringify(val: &JsValue) -> String;
-}
-
-#[wasm_bindgen(module = "fs", version = "*")]
-extern {
-    fn writeSync(fd: i32, data: &[u8]);
 }
 
 pub fn log(args: &fmt::Arguments) {
@@ -49,21 +55,33 @@ pub fn log(args: &fmt::Arguments) {
 }
 
 #[wasm_bindgen]
+
 impl Context {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Context {
+    pub fn new() -> Promise {
         console_error_panic_hook::set_once();
 
-        Context {
-            filter: None,
-            current_test: RefCell::new(None),
-            succeeded: Cell::new(0),
-            ignored: Cell::new(0),
-            failures: RefCell::new(Vec::new()),
-            current_log: RefCell::new(String::new()),
-            current_error: RefCell::new(String::new()),
-            ignore_this_test: Cell::new(false),
-        }
+        let context = node::Node::new()
+            .map(|node| {
+                match node {
+                    Some(node) => Box::new(node) as Box<Formatter>,
+                    None => Box::new(browser::Browser::new()),
+                }
+            })
+            .map(|formatter| {
+                Context {
+                    filter: None,
+                    current_test: RefCell::new(None),
+                    succeeded: Cell::new(0),
+                    ignored: Cell::new(0),
+                    failures: RefCell::new(Vec::new()),
+                    current_log: RefCell::new(String::new()),
+                    current_error: RefCell::new(String::new()),
+                    ignore_this_test: Cell::new(false),
+                    formatter,
+                }.into()
+            });
+
+        wasm_bindgen_futures::rust2js(context)
     }
 
     /// Inform this context about runtime arguments passed to the test
@@ -95,8 +113,8 @@ impl Context {
         args.push(JsValue::from(self as *const Context as u32));
 
         let noun = if tests.len() == 1 { "test" } else { "tests" };
-        console_log!("running {} {}", tests.len(), noun);
-        console_log!("");
+        self.formatter.writeln(&format!("running {} {}", tests.len(), noun));
+        self.formatter.writeln("");
 
         for test in tests {
             self.ignore_this_test.set(false);
@@ -109,7 +127,7 @@ impl Context {
                         self.log_success()
                     }
                 }
-                Err(e) => self.log_error(e.into()),
+                Err(e) => self.log_failure(e),
             }
             drop(self.current_test.borrow_mut().take());
             *self.current_log.borrow_mut() = String::new();
@@ -123,22 +141,20 @@ impl Context {
         let mut current_test = self.current_test.borrow_mut();
         assert!(current_test.is_none());
         *current_test = Some(test.to_string());
-        let data = format!("test {} ... ", test);
-        writeSync(2, data.as_bytes());
+        self.formatter.log_start(test);
     }
 
     fn log_success(&self) {
-        writeSync(2, b"ok\n");
+        self.formatter.log_success();
         self.succeeded.set(self.succeeded.get() + 1);
     }
 
     fn log_ignore(&self) {
-        writeSync(2, b"ignored\n");
+        self.formatter.log_ignored();
         self.ignored.set(self.ignored.get() + 1);
     }
 
-    fn log_error(&self, err: NodeError) {
-        writeSync(2, b"FAILED\n");
+    fn log_failure(&self, err: JsValue) {
         let name = self.current_test.borrow().as_ref().unwrap().clone();
         let log = mem::replace(&mut *self.current_log.borrow_mut(), String::new());
         let error = mem::replace(&mut *self.current_error.borrow_mut(), String::new());
@@ -154,25 +170,25 @@ impl Context {
             msg.push_str("\n");
         }
         msg.push_str("JS exception that was thrown:\n");
-        msg.push_str(&tab(&err.stack()));
+        msg.push_str(&tab(&self.formatter.log_failure(err)));
         self.failures.borrow_mut().push((name, msg));
     }
 
     fn log_results(&self) {
         let failures = self.failures.borrow();
         if failures.len() > 0 {
-            console_log!("\nfailures:\n");
+            self.formatter.writeln("\nfailures:\n");
             for (test, logs) in failures.iter() {
-                console_log!("---- {} output ----\n{}\n", test, tab(logs));
+                let msg = format!("---- {} output ----\n{}", test, tab(logs));
+                self.formatter.writeln(&msg);
             }
-            console_log!("failures:\n");
+            self.formatter.writeln("failures:\n");
             for (test, _) in failures.iter() {
-                console_log!("    {}\n", test);
+                self.formatter.writeln(&format!("    {}", test));
             }
-        } else {
-            console_log!("");
         }
-        console_log!(
+        self.formatter.writeln("");
+        self.formatter.writeln(&format!(
             "test result: {}. \
              {} passed; \
              {} failed; \
@@ -181,7 +197,7 @@ impl Context {
             self.succeeded.get(),
             failures.len(),
             self.ignored.get(),
-        );
+        ));
     }
 
     pub fn console_log(&self, original: &Function, args: &Array) {

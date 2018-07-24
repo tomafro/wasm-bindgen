@@ -2,19 +2,21 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
 use js_sys::*;
 
-#[wasm_bindgen(module = "tests/wasm/Generator.js", version = "*")]
+#[wasm_bindgen(module = "./tests/wasm/Generator.js")]
 extern {
     fn one_two_generator() -> Generator;
     fn dummy_generator() -> Generator;
     fn broken_generator() -> Generator;
+}
 
+#[wasm_bindgen]
+extern {
     type GeneratorResult;
 
     #[wasm_bindgen(method, getter, structural)]
     fn value(this: &GeneratorResult) -> JsValue;
     #[wasm_bindgen(method, getter, structural)]
     fn done(this: &GeneratorResult) -> bool;
-
 }
 
 #[wasm_bindgen_test]

@@ -1,30 +1,63 @@
-const assert = require('assert');
+function assert_eq(a, b) {
+  if (a === b)
+    return;
+  throw new Error(`${a} !== ${b}`)
+}
 
-exports.test_has_instance = function(sym) {
+function assert(a) {
+  if (a)
+    return;
+  throw new Error(`assert(false) called`);
+}
+
+function assert_throws(f) {
+  try {
+    f();
+  } catch(e) {
+    return
+  }
+
+  throw new Error('function did not throw');
+}
+
+function arrays_equal(a, b) {
+  assert_eq(a.length, b.length);
+  for (let i = 0; i < a.length; i++) {
+    const ai = a[i];
+    const bi = b[i];
+    if (ai instanceof Array) {
+      arrays_equal(ai, bi);
+    } else {
+      assert_eq(ai, bi);
+    }
+  }
+}
+
+export function test_has_instance(sym) {
   class Array1 {
     static [sym](instance) {
       return Array.isArray(instance);
     }
   }
 
-  assert.equal(typeof sym, "symbol");
-  assert.ok([] instanceof Array1);
-};
+  assert_eq(typeof sym, "symbol");
+  assert([] instanceof Array1);
+}
 
-exports.test_is_concat_spreadable = function(sym) {
+export function test_is_concat_spreadable(sym) {
   const alpha = ['a', 'b', 'c'];
   const numeric = [1, 2, 3];
   let alphaNumeric = alpha.concat(numeric);
 
-  assert.deepEqual(alphaNumeric, ["a", "b", "c", 1, 2, 3]);
+  arrays_equal(alphaNumeric, ["a", "b", "c", 1, 2, 3]);
 
   numeric[sym] = false;
   alphaNumeric = alpha.concat(numeric);
 
-  assert.deepEqual(alphaNumeric, ["a", "b", "c", [1, 2, 3]]);
-};
+  arrays_equal(alphaNumeric, ["a", "b", "c", [1, 2, 3]]);
+}
 
-exports.test_iterator = function(sym) {
+export function test_iterator(sym) {
   const iterable1 = new Object();
 
   iterable1[sym] = function* () {
@@ -33,21 +66,21 @@ exports.test_iterator = function(sym) {
     yield 3;
   };
 
-  assert.deepEqual([...iterable1], [1, 2, 3]);
-};
+  arrays_equal([...iterable1], [1, 2, 3]);
+}
 
-exports.test_match = function(sym) {
+export function test_match(sym) {
   const regexp1 = /foo/;
-  assert.throws(() => '/foo/'.startsWith(regexp1));
+  assert_throws(() => '/foo/'.startsWith(regexp1));
 
   regexp1[sym] = false;
 
-  assert.ok('/foo/'.startsWith(regexp1));
+  assert('/foo/'.startsWith(regexp1));
 
-  assert.equal('/baz/'.endsWith(regexp1), false);
-};
+  assert_eq('/baz/'.endsWith(regexp1), false);
+}
 
-exports.test_replace = function(sym) {
+export function test_replace(sym) {
   class Replace1 {
     constructor(value) {
       this.value = value;
@@ -57,10 +90,10 @@ exports.test_replace = function(sym) {
     }
   }
 
-  assert.equal('foo'.replace(new Replace1('bar')), 's/foo/bar/g');
-};
+  assert_eq('foo'.replace(new Replace1('bar')), 's/foo/bar/g');
+}
 
-exports.test_search = function(sym) {
+export function test_search(sym) {
   class Search1 {
     constructor(value) {
       this.value = value;
@@ -71,10 +104,10 @@ exports.test_search = function(sym) {
     }
   }
 
-  assert.equal('foobar'.search(new Search1('bar')), 3);
-};
+  assert_eq('foobar'.search(new Search1('bar')), 3);
+}
 
-exports.test_species = function(sym) {
+export function test_species(sym) {
   class Array1 extends Array {
     static get [sym]() { return Array; }
   }
@@ -82,12 +115,12 @@ exports.test_species = function(sym) {
   const a = new Array1(1, 2, 3);
   const mapped = a.map(x => x * x);
 
-  assert.equal(mapped instanceof Array1, false);
+  assert_eq(mapped instanceof Array1, false);
 
-  assert.ok(mapped instanceof Array);
-};
+  assert(mapped instanceof Array);
+}
 
-exports.test_split = function(sym) {
+export function test_split(sym) {
   class Split1 {
     constructor(value) {
       this.value = value;
@@ -100,10 +133,10 @@ exports.test_split = function(sym) {
     }
   }
 
-  assert.equal('foobar'.split(new Split1('foo')), 'foo/bar');
-};
+  assert_eq('foobar'.split(new Split1('foo')), 'foo/bar');
+}
 
-exports.test_to_primitive = function(sym) {
+export function test_to_primitive(sym) {
   const object1 = {
     [sym](hint) {
       if (hint == 'number') {
@@ -113,15 +146,15 @@ exports.test_to_primitive = function(sym) {
     }
   };
 
-  assert.equal(+object1, 42);
-};
+  assert_eq(+object1, 42);
+}
 
-exports.test_to_string_tag = function(sym) {
+export function test_to_string_tag(sym) {
   class ValidatorClass {
     get [sym]() {
       return 'Validator';
     }
   }
 
-  assert.equal(Object.prototype.toString.call(new ValidatorClass()), '[object Validator]');
-};
+  assert_eq(Object.prototype.toString.call(new ValidatorClass()), '[object Validator]');
+}

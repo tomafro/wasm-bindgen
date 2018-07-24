@@ -1,11 +1,11 @@
-const symbol_key = Symbol();
+const key = Symbol();
 
-exports.map_with_symbol_key = function() {
-  return { [symbol_key]: 42 };
-};
-exports.symbol_key = function() {
-  return symbol_key;
-};
+export function map_with_symbol_key() {
+  return { [key]: 42 };
+}
+export function symbol_key() {
+  return key;
+}
 
-exports.Foo = class {};
-exports.Bar = class {};
+export class Foo {}
+export class Bar {}

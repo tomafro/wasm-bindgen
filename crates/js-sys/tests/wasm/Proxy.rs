@@ -2,11 +2,14 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
 use js_sys::*;
 
-#[wasm_bindgen(module = "tests/wasm/Proxy.js", version = "*")]
+#[wasm_bindgen(module = "./tests/wasm/Proxy.js")]
 extern {
     fn proxy_target() -> JsValue;
     fn proxy_handler() -> Object;
+}
 
+#[wasm_bindgen]
+extern {
     type Custom;
     #[wasm_bindgen(method, getter, structural, catch)]
     fn a(this: &Custom) -> Result<u32, JsValue>;

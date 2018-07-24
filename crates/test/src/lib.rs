@@ -4,10 +4,12 @@
 
 #![feature(use_extern_macros)]
 
-extern crate wasm_bindgen_test_macro;
-extern crate wasm_bindgen;
-extern crate js_sys;
 extern crate console_error_panic_hook;
+extern crate futures;
+extern crate js_sys;
+extern crate wasm_bindgen;
+extern crate wasm_bindgen_futures;
+extern crate wasm_bindgen_test_macro;
 
 pub use wasm_bindgen_test_macro::wasm_bindgen_test;
 
@@ -20,6 +22,6 @@ macro_rules! console_log {
     )
 }
 
-#[path = "rt.rs"]
+#[path = "rt/mod.rs"]
 #[doc(hidden)]
 pub mod __rt;

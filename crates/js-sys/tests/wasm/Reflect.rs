@@ -2,7 +2,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
 use js_sys::*;
 
-#[wasm_bindgen(module = "tests/wasm/Reflect.js", version = "*")]
+#[wasm_bindgen(module = "./tests/wasm/Reflect.js")]
 extern {
     fn get_char_at() -> Function;
 
@@ -112,7 +112,7 @@ fn get_own_property_descriptor() {
     let desc = Reflect::get_own_property_descriptor(&obj, &"x".into());
     assert_eq!(PropertyDescriptor::from(desc).value(), 10);
     let desc = Reflect::get_own_property_descriptor(&obj, &"foo".into());
-    assert!(PropertyDescriptor::from(desc).value().is_undefined());
+    assert!(desc.is_undefined());
 }
 
 #[wasm_bindgen_test]
